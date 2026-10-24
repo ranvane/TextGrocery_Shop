@@ -336,236 +336,25 @@ No `pickle`, so models can move across Python versions and operating systems.
 **Old 0.1.x models are not loadable**; retrain once with 0.2.x. Early 0.2.0
 models still load: missing new options fall back to the old behavior.
 
-## Packaging and publishing
+## Publishing to PyPI
 
-This section is for maintainers. The project is pure Python, so the wheel is
-`py3-none-any` and no C compiler is needed.
+The repository publishes automatically with GitHub Actions and PyPI Trusted
+Publishing: publishing a GitHub Release triggers
+`.github/workflows/pypi_publish.yml`, which builds the wheel/sdist and uploads
+it to PyPI. No PyPI API token is stored in the repository or locally.
 
-### 1. Distribution name
+### One-time setup
 
-The distribution name is `TextGrocery_Shop`. PyPI and pip normalize it to
-`textgrocery-shop`, so the install command is:
-
-```bash
-pip install textgrocery-shop
-```
-
-The import name stays `tgrocery`; only the install command differs from the
-original project. The name was free on PyPI at the time of writing — verify at
-<https://pypi.org/project/textgrocery-shop/> before the first upload. If it is
-taken, change `[project].name` in `pyproject.toml` to another unique name and
-update every `pip install` command in both READMEs.
-
-### 2. Keep both versions in sync
-
-The version is stored in two places:
-
-- `[project].version` in `pyproject.toml`
-- `__version__` in `tgrocery/__init__.py`
-
-```bash
-# read the version from pyproject.toml (works on Python 3.10)
-python -c "import pathlib; print([line for line in pathlib.Path('pyproject.toml').read_text('utf-8').splitlines() if line.startswith('version =')][0])"
-python -c "import tgrocery; print(tgrocery.__version__)"
-```
-
-PyPI versions cannot be overwritten. Bump the version for every release; deleting
-a release does not let you reuse the same version or filename.
-
-### 3. Install build tools and clean old artifacts
-
-```bash
-python -m pip install --upgrade build twine
-```
-
-```bash
-# Linux / macOS / Git Bash
-rm -rf build dist *.egg-info
-```
-
-```powershell
-# PowerShell
-Remove-Item -Recurse -Force build, dist -ErrorAction SilentlyContinue
-Get-ChildItem -Filter *.egg-info -Recurse | Remove-Item -Recurse -Force
-```
-
-### 4. Run quality gates
-
-```bash
-ruff check .
-ruff format --check .
-pytest
-```
-
-### 5. Build the wheel and sdist
-
-```bash
-python -m build
-```
-
-Output:
-
-```text
-dist/
-    textgrocery_shop-0.2.0.tar.gz                  # source distribution
-    textgrocery_shop-0.2.0-py3-none-any.whl        # pure-Python wheel
-```
-
-Use `python -m build --wheel` or `--sdist` to build only one artifact. `build`
-creates an isolated environment, so it needs network access to install
-`setuptools`.
-
-### 6. Inspect the artifacts
-
-```bash
-python -m zipfile -l dist/textgrocery_shop-0.2.0-py3-none-any.whl
-python -m twine check dist/*
-```
-
-PowerShell does not expand `dist/*` for native commands:
-
-```powershell
-python -m twine check (Get-ChildItem dist | ForEach-Object FullName)
-```
-
-The wheel should contain only runtime code and metadata:
-
-```text
-tgrocery/*.py
-tgrocery/learner/*.py
-textgrocery_shop-0.2.0.dist-info/METADATA
-textgrocery_shop-0.2.0.dist-info/licenses/LICENSE.txt
-```
-
-It must not contain `tests/`, `sample/`, `__pycache__/`, `build/` or model
-directories. The sdist is controlled by `MANIFEST.in` and also includes the
-README, tests and samples. `twine check` must print `PASSED` for every artifact.
-
-### 7. Install the wheel locally
-
-Install the freshly built wheel in a clean environment:
-
-```bash
-python -m pip install --force-reinstall --no-deps dist/textgrocery_shop-0.2.0-py3-none-any.whl
-python -c "import tgrocery; print(tgrocery.__version__)"
-```
-
-Smoke test:
-
-```bash
-python -c "from tgrocery import Grocery; g=Grocery('smoke'); g.train([('a','up new high'),('b','down loss risk')]); print(g.predict('up new high'))"
-```
-
-This creates a `smoke/` model directory in the current directory; delete it after
-the check. Run this outside the source directory, otherwise Python may import the
-local `tgrocery/` package instead of the installed wheel. Check `pip show textgrocery-shop`
-if in doubt. Reinstall in editable mode afterwards if you continue development:
-
-```bash
-pip install -e .[test]
-```
-
-### 8. (Optional) Upload to TestPyPI
-
-Official releases use Trusted Publishing (section 10). This section is only for
-a local rehearsal.
-
-Create an account and an API token at [test.pypi.org](https://test.pypi.org/).
-Pass credentials through environment variables, never commit them:
-
-```bash
-export TWINE_USERNAME=__token__
-export TWINE_PASSWORD=pypi-your-testpypi-token
-python -m twine upload --repository testpypi dist/*
-```
-
-PowerShell:
-
-```powershell
-$env:TWINE_USERNAME="__token__"
-$env:TWINE_PASSWORD="pypi-your-testpypi-token"
-python -m twine upload --repository testpypi (Get-ChildItem dist | ForEach-Object FullName)
-```
-
-Verify the uploaded package:
-
-```bash
-pip install --index-url https://test.pypi.org/simple/ \
-    --extra-index-url https://pypi.org/simple \
-    textgrocery-shop==0.2.0
-```
-
-`--extra-index-url` lets pip fetch `jieba` and `numpy` from the real PyPI, since
-TestPyPI does not mirror all dependencies. Use TestPyPI as a rehearsal.
-
-### 9. (Fallback) Upload to PyPI manually
-
-Use GitHub Actions + Trusted Publishing (section 10) for normal releases. The
-local `twine` flow below is only for bypassing CI or debugging an upload.
-
-Create an API token at [pypi.org](https://pypi.org/). The first upload usually
-needs an account-scoped token; later you can use a project-scoped token. Enable
-2FA on the account.
-
-```bash
-export TWINE_USERNAME=__token__
-export TWINE_PASSWORD=pypi-your-pypi-token
-python -m twine upload dist/*
-```
-
-PowerShell:
-
-```powershell
-$env:TWINE_USERNAME="__token__"
-$env:TWINE_PASSWORD="pypi-your-pypi-token"
-python -m twine upload (Get-ChildItem dist | ForEach-Object FullName)
-```
-
-Notes:
-
-- `twine upload` defaults to PyPI; `--repository pypi` is optional.
-- If an upload is interrupted, do not rebuild a different artifact under the
-  same version. Check what was uploaded, then retry the same files or bump the
-  version.
-- Once PyPI accepts a version or filename, it cannot be reused, even after
-  deletion. Fix metadata with a new release.
-- Never commit `dist/`, `.pypirc` or tokens. `.pypirc` is already in
-  `.gitignore`.
-
-Verify the release:
-
-```bash
-pip index versions textgrocery-shop
-pip install --no-cache-dir textgrocery-shop==0.2.0
-python -c "import tgrocery; print(tgrocery.__version__)"
-```
-
-### 10. Publish with GitHub Actions (recommended)
-
-The repository contains `.github/workflows/pypi_publish.yml`. Publishing a
-GitHub **Release** builds the wheel/sdist and uploads it to PyPI. It uses PyPI
-Trusted Publishing (short-lived OIDC credentials), so no `TWINE_PASSWORD` or API
-token is stored in the repository.
-
-Workflow details:
-
-- Trigger: `release: types: [published]`
-- Build job `release-build`: runs `python -m build`; artifact name `release-dists`
-- Publish job `pypi-publish`: `environment: pypi` and
-  `permissions: id-token: write`
-- Upload action: `pypa/gh-action-pypi-publish@release/v1`
-
-One-time setup:
-
-1. On PyPI, open **Publishing** and add a GitHub publisher with owner
+1. The distribution name is `TextGrocery_Shop` (pip name `textgrocery-shop`).
+   On PyPI, open **Publishing** and add a GitHub publisher with owner
    `ranvane`, repository `TextGrocery_Shop`, workflow `pypi_publish.yml`, and
    environment `pypi`. For a brand-new project, use a **pending publisher**.
-2. In GitHub, open **Settings → Environments** and create `pypi` (required
-   reviewers are recommended).
+2. In the GitHub repository, open **Settings → Environments** and create
+   `pypi` (required reviewers are recommended).
 3. Make sure `[project].version` in `pyproject.toml` matches `__version__` in
    `tgrocery/__init__.py`.
 
-Release flow:
+### Release flow
 
 ```bash
 # 1. Commit and push the code, wait for CI, then tag it
@@ -575,32 +364,34 @@ git push origin v0.2.0
 
 2. Open the repository's **Releases → Draft a new release**, choose tag
    `v0.2.0`, set the title to `v0.2.0`, and click **Publish release**.
-3. In **Actions**, confirm the `Upload Python Package` workflow succeeded.
-4. Verify the release:
+3. The `Upload Python Package` workflow runs automatically:
+   - `python -m build` creates `textgrocery_shop-0.2.0-py3-none-any.whl` and
+     `textgrocery_shop-0.2.0.tar.gz`;
+   - `pypa/gh-action-pypi-publish@release/v1` uploads them to PyPI.
+4. Confirm the publish job succeeded on the **Actions** page.
+
+Keep `permissions: id-token: write` in the workflow; without it OIDC cannot
+exchange a short-lived PyPI credential.
+
+### Verify the release
 
 ```bash
 pip install --no-cache-dir textgrocery-shop==0.2.0
 python -c "import tgrocery; print(tgrocery.__version__)"
 ```
 
-`permissions: id-token: write` is required for OIDC. To publish to TestPyPI
-first, add `with: repository-url: https://test.pypi.org/legacy/` to the upload
-step and configure a matching trusted publisher on TestPyPI.
+PyPI versions and filenames cannot be reused. Bump the version and create a new
+tag and Release before publishing again.
 
-### 11. Release checklist
+### Release checklist
 
-- [ ] The distribution name is available, or the account owns it
 - [ ] `pyproject.toml` and `tgrocery/__init__.py` versions match
-- [ ] README install commands use the real distribution name
 - [ ] `ruff check .`, `ruff format --check .`, and `pytest` pass
-- [ ] `python -m build` produces both wheel and sdist
-- [ ] `twine check` reports `PASSED` for both
-- [ ] The wheel contains no tests, samples, caches or model directories
-- [ ] The wheel installs and passes a train/predict smoke test
-- [ ] (Optional) The package installs from TestPyPI
-- [ ] A tag such as `v0.2.0` is created and pushed
-- [ ] A GitHub Release is published, triggering `Upload Python Package`
-- [ ] The publish job succeeds and the package installs from PyPI with `pip`
+- [ ] Code is committed and pushed, and CI passes
+- [ ] A tag such as `v0.2.0` is pushed
+- [ ] A GitHub Release is published
+- [ ] The `Upload Python Package` workflow succeeds
+- [ ] `pip install textgrocery-shop==0.2.0` works from PyPI
 - [ ] `dist/`, `.pypirc`, tokens and local models are not committed
 
 ## Development

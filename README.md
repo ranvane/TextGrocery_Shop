@@ -423,262 +423,61 @@ name/
 - **0.1.x 旧模型不可加载**：旧模型依赖 pickle 与 C 后端，请用新版重新训练一次。
 - 0.2.0 早期模型仍可加载：缺失的新配置会自动回退到旧行为。
 
-## 打包与发布
+## 发布到 PyPI
 
-本节面向维护者，说明如何构建 wheel/sdist、上传 TestPyPI 和 PyPI。项目是纯 Python 包，
-wheel 为 `py3-none-any`，构建过程不需要 C 编译器。
+仓库使用 GitHub Actions + PyPI Trusted Publishing 自动发布：在 GitHub 发布
+Release 时，`.github/workflows/pypi_publish.yml` 自动构建 wheel/sdist 并上传
+PyPI。整个流程不需要在仓库或本地保存 PyPI API token。
 
-### 1. 发行名
+### 一次性配置
 
-发行名是 `TextGrocery_Shop`。PyPI 与 pip 会把它规范化为 `textgrocery-shop`，
-所以安装命令是：
-
-```bash
-pip install textgrocery-shop
-```
-
-Python 导入名仍然是 `tgrocery`，只有安装命令与原版不同。撰写本文时该名称在
-PyPI 上可用，首次上传前请再确认 <https://pypi.org/project/textgrocery-shop/>。
-如果已被占用，修改 `pyproject.toml` 的 `[project].name`，并同步更新两份 README
-里所有 `pip install` 命令。
-
-### 2. 同步版本号
-
-版本号出现在两个地方，发布前必须保持一致：
-
-- `pyproject.toml` 的 `[project].version`
-- `tgrocery/__init__.py` 的 `__version__`
-
-```bash
-# 查看 pyproject.toml 中的版本号（兼容 Python 3.10）
-python -c "import pathlib; print([line for line in pathlib.Path('pyproject.toml').read_text('utf-8').splitlines() if line.startswith('version =')][0])"
-python -c "import tgrocery; print(tgrocery.__version__)"
-```
-
-PyPI 上的版本号不可覆盖，发布后也不能删除重传同一版本；每次发布都要提升版本号。
-
-### 3. 安装构建工具并清理旧产物
-
-```bash
-# 安装构建工具
-python -m pip install --upgrade build twine
-```
-
-```bash
-# Linux / macOS / Git Bash
-rm -rf build dist *.egg-info
-```
-
-```powershell
-# PowerShell
-Remove-Item -Recurse -Force build, dist -ErrorAction SilentlyContinue
-Get-ChildItem -Filter *.egg-info -Recurse | Remove-Item -Recurse -Force
-```
-
-### 4. 运行质量检查
-
-```bash
-ruff check .
-ruff format --check .
-pytest
-```
-
-三项都通过再打包，避免把坏版本发到 PyPI。
-
-### 5. 构建 wheel 与 sdist
-
-```bash
-python -m build
-```
-
-产物在 `dist/`：
-
-```text
-dist/
-    textgrocery_shop-0.2.0.tar.gz                  # 源码包
-    textgrocery_shop-0.2.0-py3-none-any.whl        # 纯 Python wheel
-```
-
-只构建 wheel 用 `python -m build --wheel`；只构建源码包用
-`python -m build --sdist`。`python -m build` 会创建隔离的构建环境，
-需要联网安装 `setuptools`。
-
-### 6. 检查产物
-
-```bash
-python -m zipfile -l dist/textgrocery_shop-0.2.0-py3-none-any.whl
-python -m twine check dist/*
-```
-
-PowerShell 不会像 bash 那样展开 `dist/*`，可以改用：
-
-```powershell
-python -m twine check (Get-ChildItem dist | ForEach-Object FullName)
-```
-
-wheel 里应只包含运行时代码和元数据，例如：
-
-```text
-tgrocery/*.py
-tgrocery/learner/*.py
-textgrocery_shop-0.2.0.dist-info/METADATA
-textgrocery_shop-0.2.0.dist-info/licenses/LICENSE.txt
-```
-
-不应出现 `tests/`、`sample/`、`__pycache__/`、`build/` 或模型目录。源码包由
-`MANIFEST.in` 控制，会额外包含 README、测试和示例；两个产物都应由
-`twine check` 输出 `PASSED`。
-
-### 7. 本地安装 wheel 验证
-
-在干净环境中安装刚构建的 wheel：
-
-```bash
-python -m pip install --force-reinstall --no-deps dist/textgrocery_shop-0.2.0-py3-none-any.whl
-python -c "import tgrocery; print(tgrocery.__version__)"
-```
-
-再跑一个最小训练/预测：
-
-```bash
-python -c "from tgrocery import Grocery; g=Grocery('smoke'); g.train([('a','上涨 突破 新高'),('b','下跌 亏损 风险')]); print(g.predict('上涨 突破'))"
-```
-
-该命令会在当前目录生成 `smoke/` 模型目录，验证后可以删除。如果当前目录是源码目录，
-Python 可能优先导入本地 `tgrocery/`；请换到其他目录执行，或确认 `pip show textgrocery-shop`
-的 `Location` 指向安装目录。验证完后如继续开发，再执行 `pip install -e .[test]`。
-
-### 8.（可选）上传到 TestPyPI 彩排
-
-正式发布推荐用第 10 节的 Trusted Publishing；这一节只在需要本地彩排时使用。
-
-先在 [test.pypi.org](https://test.pypi.org/) 注册账号并创建 API token。
-建议用环境变量传递 token，不要把 token 写进仓库：
-
-```bash
-export TWINE_USERNAME=__token__
-export TWINE_PASSWORD=pypi-你的TestPyPI令牌
-python -m twine upload --repository testpypi dist/*
-```
-
-PowerShell：
-
-```powershell
-$env:TWINE_USERNAME="__token__"
-$env:TWINE_PASSWORD="pypi-你的TestPyPI令牌"
-python -m twine upload --repository testpypi (Get-ChildItem dist | ForEach-Object FullName)
-```
-
-从 TestPyPI 安装验证：
-
-```bash
-pip install --index-url https://test.pypi.org/simple/ \
-    --extra-index-url https://pypi.org/simple \
-    textgrocery-shop==0.2.0
-```
-
-`--extra-index-url` 用于从正式 PyPI 获取 `jieba`、`numpy` 等依赖，因为 TestPyPI
-不保证同步所有依赖。TestPyPI 适合彩排，确认无误后再发正式 PyPI。
-
-### 9.（备用）手动上传到 PyPI
-
-推荐用第 10 节的 GitHub Actions + Trusted Publishing。只有需要绕过 CI 或排查上传
-问题时，才使用下面的本地 `twine` 流程。
-
-在 [pypi.org](https://pypi.org/) 创建 API token；首次发布通常需要账号级 token，
-项目创建后可改用仅限该项目的 token。账号需开启 2FA。
-
-```bash
-export TWINE_USERNAME=__token__
-export TWINE_PASSWORD=pypi-你的PyPI令牌
-python -m twine upload dist/*
-```
-
-PowerShell：
-
-```powershell
-$env:TWINE_USERNAME="__token__"
-$env:TWINE_PASSWORD="pypi-你的PyPI令牌"
-python -m twine upload (Get-ChildItem dist | ForEach-Object FullName)
-```
-
-说明：
-
-- `twine upload` 默认上传到正式 PyPI；显式指定可用 `--repository pypi`。
-- 上传过程中断时，**不要修改代码后覆盖同一版本**。先确认哪些文件已上传，
-  再决定重试同一批文件还是提升版本号。
-- 版本号或文件名一旦被 PyPI 接收，即使删除也不能复用；元数据写错也要发新版本。
-- 不要把 `dist/`、`.pypirc` 或 token 提交到 Git；`.pypirc` 已在 `.gitignore` 中。
-
-发布后验证：
-
-```bash
-pip index versions textgrocery-shop
-pip install --no-cache-dir textgrocery-shop==0.2.0
-python -c "import tgrocery; print(tgrocery.__version__)"
-```
-
-### 10. 用 GitHub Actions 自动发布（推荐）
-
-仓库已包含 `.github/workflows/pypi_publish.yml`。在 GitHub **发布 Release** 时，
-工作流会自动构建 wheel/sdist 并上传 PyPI。它使用 PyPI Trusted Publishing
-（OIDC 短期凭证），仓库中不需要保存 `TWINE_PASSWORD` 或 API token。
-
-工作流关键点：
-
-- 触发条件：`release: types: [published]`
-- 构建 job `release-build`：`python -m build`，artifact 名 `release-dists`
-- 发布 job `pypi-publish`：`environment: pypi` + `permissions: id-token: write`
-- 上传动作：`pypa/gh-action-pypi-publish@release/v1`
-
-一次性配置：
-
-1. 在 PyPI 的 **Publishing** 页面添加 GitHub publisher：
-   owner 填 `ranvane`、repository 填 `TextGrocery_Shop`、workflow 填
-   `pypi_publish.yml`、environment 填 `pypi`。项目尚不存在时使用
-   **pending publisher**。
+1. 发行名固定为 `TextGrocery_Shop`（pip 安装名 `textgrocery-shop`）。在 PyPI 的
+   **Publishing** 页面添加 GitHub publisher：owner 填 `ranvane`、repository 填
+   `TextGrocery_Shop`、workflow 填 `pypi_publish.yml`、environment 填 `pypi`；
+   项目尚不存在时使用 **pending publisher**。
 2. 在 GitHub 仓库 **Settings → Environments** 创建 `pypi` 环境，建议添加
    required reviewers。
-3. 确认 `pyproject.toml` 的版本号与 `tgrocery/__init__.py` 的 `__version__`
-   一致。
+3. 确认 `pyproject.toml` 的 `[project].version` 与
+   `tgrocery/__init__.py` 的 `__version__` 一致。
 
-发布流程：
+### 发布流程
 
 ```bash
-# 1. 确保代码已提交、CI 通过，然后打 tag
+# 1. 提交代码，等 CI 通过后打 tag
 git tag v0.2.0
 git push origin v0.2.0
 ```
 
 2. 打开 GitHub 仓库的 **Releases → Draft a new release**，选择 tag `v0.2.0`，
    标题填 `v0.2.0`，点击 **Publish release**。
-3. 在 **Actions** 页面确认 `Upload Python Package` 工作流执行成功。
-4. 验证正式包：
+3. 工作流 `Upload Python Package` 会自动执行：
+   - `python -m build` 生成 `textgrocery_shop-0.2.0-py3-none-any.whl` 和
+     `textgrocery_shop-0.2.0.tar.gz`；
+   - 通过 `pypa/gh-action-pypi-publish@release/v1` 上传到 PyPI。
+4. 在 **Actions** 页面确认发布 job 成功。
+
+工作流中的 `permissions: id-token: write` 必须保留，否则 OIDC 无法换取 PyPI
+短期凭证。
+
+### 发布后验证
 
 ```bash
 pip install --no-cache-dir textgrocery-shop==0.2.0
 python -c "import tgrocery; print(tgrocery.__version__)"
 ```
 
-`permissions: id-token: write` 必须保留，否则 OIDC 无法换取 PyPI 凭证。
-若要先发 TestPyPI，在 workflow 的上传步骤加
-`with: repository-url: https://test.pypi.org/legacy/`，并在 TestPyPI 的
-Publishing 页面单独配置对应的 trusted publisher。
+PyPI 版本号和文件名一旦上传就不能复用；再次发布前必须提升版本号，并创建新的
+tag 与 Release。
 
-### 11. 发布检查清单
+### 发布检查清单
 
-- [ ] PyPI 发行名可用，或当前账号拥有该项目
 - [ ] `pyproject.toml` 与 `tgrocery/__init__.py` 的版本号一致
-- [ ] README 中的安装命令与实际发行名一致
 - [ ] `ruff check .`、`ruff format --check .`、`pytest` 全部通过
-- [ ] `python -m build` 生成 wheel 和 sdist
-- [ ] `twine check` 全部 `PASSED`
-- [ ] wheel 内没有测试、示例、缓存和模型目录
-- [ ] 在干净环境安装 wheel 并能训练/预测
-- [ ] （可选）在 TestPyPI 安装验证通过
-- [ ] 打 tag（如 `v0.2.0`）并推送
-- [ ] 创建并发布 GitHub Release，触发 `Upload Python Package`
-- [ ] GitHub Actions 发布 job 成功，正式 PyPI 可用 `pip install` 安装
+- [ ] 代码已提交并推送，CI 通过
+- [ ] tag（如 `v0.2.0`）已推送
+- [ ] 已在 GitHub 发布 Release
+- [ ] `Upload Python Package` 工作流成功
+- [ ] 正式 PyPI 可用 `pip install textgrocery-shop==0.2.0` 安装
 - [ ] 未提交 `dist/`、`.pypirc`、token 或本地模型
 
 ## 开发

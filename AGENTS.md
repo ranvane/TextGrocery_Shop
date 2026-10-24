@@ -23,17 +23,11 @@
 python3 -m pytest -q
 ruff check .
 ruff format --check .
-rm -rf build dist *.egg-info
-python3 -m build
-python3 -m twine check dist/*
 ```
-
-构建要求 `setuptools>=77`（PEP 639 的 `license` / `license-files`）。
-系统自带旧版 setuptools 时不要用 `python3 -m build --no-isolation`。
 
 ## 发布
 
-发布使用 `.github/workflows/pypi_publish.yml`：在 GitHub 发布 Release 时，
-通过 PyPI Trusted Publishing 自动上传，不需要仓库保存 token。
-完整流程（版本同步、tag、Release、验证）见两份 README 的
-“打包与发布 / Packaging and publishing”章节。
+打包和上传只由 `.github/workflows/pypi_publish.yml` 完成：在 GitHub 发布
+Release 时，通过 PyPI Trusted Publishing 自动构建并上传，不需要仓库保存 token。
+本地不需要手动上传。完整流程（版本同步、tag、Release、验证）见两份
+README 的“发布到 PyPI / Publishing to PyPI”章节。
