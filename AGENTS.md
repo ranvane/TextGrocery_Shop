@@ -33,6 +33,7 @@ python3 -m twine check dist/*
 
 ## 发布
 
-首次发布前确认 <https://pypi.org/project/textgrocery-shop/> 仍可用。
-完整流程（TestPyPI、twine 环境变量、Trusted Publishing）见两份 README 的
+发布使用 `.github/workflows/pypi_publish.yml`：在 GitHub 发布 Release 时，
+通过 PyPI Trusted Publishing 自动上传，不需要仓库保存 token。
+完整流程（版本同步、tag、Release、验证）见两份 README 的
 “打包与发布 / Packaging and publishing”章节。

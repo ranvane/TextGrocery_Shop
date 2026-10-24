@@ -465,7 +465,10 @@ if in doubt. Reinstall in editable mode afterwards if you continue development:
 pip install -e .[test]
 ```
 
-### 8. Upload to TestPyPI
+### 8. (Optional) Upload to TestPyPI
+
+Official releases use Trusted Publishing (section 10). This section is only for
+a local rehearsal.
 
 Create an account and an API token at [test.pypi.org](https://test.pypi.org/).
 Pass credentials through environment variables, never commit them:
@@ -495,7 +498,10 @@ pip install --index-url https://test.pypi.org/simple/ \
 `--extra-index-url` lets pip fetch `jieba` and `numpy` from the real PyPI, since
 TestPyPI does not mirror all dependencies. Use TestPyPI as a rehearsal.
 
-### 9. Upload to PyPI
+### 9. (Fallback) Upload to PyPI manually
+
+Use GitHub Actions + Trusted Publishing (section 10) for normal releases. The
+local `twine` flow below is only for bypassing CI or debugging an upload.
 
 Create an API token at [pypi.org](https://pypi.org/). The first upload usually
 needs an account-scoped token; later you can use a project-scoped token. Enable
@@ -536,61 +542,50 @@ python -c "import tgrocery; print(tgrocery.__version__)"
 
 ### 10. Publish with GitHub Actions (recommended)
 
-PyPI Trusted Publishing avoids storing a long-lived token: GitHub Actions gets a
-short-lived OIDC credential.
+The repository contains `.github/workflows/pypi_publish.yml`. Publishing a
+GitHub **Release** builds the wheel/sdist and uploads it to PyPI. It uses PyPI
+Trusted Publishing (short-lived OIDC credentials), so no `TWINE_PASSWORD` or API
+token is stored in the repository.
 
-1. On the PyPI project page, open **Publishing** and add a GitHub publisher
-   with the repository owner/name, workflow `publish.yml`, and environment
-   `pypi`. For a brand-new project, use a **pending publisher**.
-2. In GitHub, open **Settings → Environments** and create `pypi` (optionally
-   with required reviewers).
-3. Add `.github/workflows/publish.yml`:
+Workflow details:
 
-```yaml
-name: publish
+- Trigger: `release: types: [published]`
+- Build job `release-build`: runs `python -m build`; artifact name `release-dists`
+- Publish job `pypi-publish`: `environment: pypi` and
+  `permissions: id-token: write`
+- Upload action: `pypa/gh-action-pypi-publish@release/v1`
 
-on:
-  release:
-    types: [published]
-  workflow_dispatch:
+One-time setup:
 
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - run: python -m pip install --upgrade build
-      - run: python -m build
-      - uses: actions/upload-artifact@v4
-        with:
-          name: dist
-          path: dist/
+1. On PyPI, open **Publishing** and add a GitHub publisher with owner
+   `ranvane`, repository `TextGrocery_Shop`, workflow `pypi_publish.yml`, and
+   environment `pypi`. For a brand-new project, use a **pending publisher**.
+2. In GitHub, open **Settings → Environments** and create `pypi` (required
+   reviewers are recommended).
+3. Make sure `[project].version` in `pyproject.toml` matches `__version__` in
+   `tgrocery/__init__.py`.
 
-  publish:
-    needs: build
-    runs-on: ubuntu-latest
-    environment: pypi
-    permissions:
-      id-token: write
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: dist
-          path: dist/
-      - uses: pypa/gh-action-pypi-publish@release/v1
+Release flow:
+
+```bash
+# 1. Commit and push the code, wait for CI, then tag it
+git tag v0.2.0
+git push origin v0.2.0
 ```
 
-`permissions: id-token: write` is required for OIDC. For TestPyPI, add the
-repository URL to the publish step and configure a matching trusted publisher on
-TestPyPI:
+2. Open the repository's **Releases → Draft a new release**, choose tag
+   `v0.2.0`, set the title to `v0.2.0`, and click **Publish release**.
+3. In **Actions**, confirm the `Upload Python Package` workflow succeeded.
+4. Verify the release:
 
-```yaml
-        with:
-          repository-url: https://test.pypi.org/legacy/
+```bash
+pip install --no-cache-dir textgrocery-shop==0.2.0
+python -c "import tgrocery; print(tgrocery.__version__)"
 ```
+
+`permissions: id-token: write` is required for OIDC. To publish to TestPyPI
+first, add `with: repository-url: https://test.pypi.org/legacy/` to the upload
+step and configure a matching trusted publisher on TestPyPI.
 
 ### 11. Release checklist
 
@@ -602,9 +597,10 @@ TestPyPI:
 - [ ] `twine check` reports `PASSED` for both
 - [ ] The wheel contains no tests, samples, caches or model directories
 - [ ] The wheel installs and passes a train/predict smoke test
-- [ ] The package installs from TestPyPI
+- [ ] (Optional) The package installs from TestPyPI
 - [ ] A tag such as `v0.2.0` is created and pushed
-- [ ] The PyPI release installs with `pip`
+- [ ] A GitHub Release is published, triggering `Upload Python Package`
+- [ ] The publish job succeeds and the package installs from PyPI with `pip`
 - [ ] `dist/`, `.pypirc`, tokens and local models are not committed
 
 ## Development
@@ -621,6 +617,8 @@ ruff format --check .
 - **2026-10-24**: Renamed the PyPI distribution to `TextGrocery_Shop`
   (`pip install textgrocery-shop`); the import name stays `tgrocery`.
   Unified the license metadata and `LICENSE.txt` to BSD-3-Clause.
+- **2026-10-24**: Releases now use GitHub Release + Trusted Publishing; the
+  `.github/workflows/pypi_publish.yml` workflow publishes to PyPI.
 
 ## License
 

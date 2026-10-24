@@ -548,7 +548,9 @@ python -c "from tgrocery import Grocery; g=Grocery('smoke'); g.train([('a','上�
 Python 可能优先导入本地 `tgrocery/`；请换到其他目录执行，或确认 `pip show textgrocery-shop`
 的 `Location` 指向安装目录。验证完后如继续开发，再执行 `pip install -e .[test]`。
 
-### 8. 上传到 TestPyPI
+### 8.（可选）上传到 TestPyPI 彩排
+
+正式发布推荐用第 10 节的 Trusted Publishing；这一节只在需要本地彩排时使用。
 
 先在 [test.pypi.org](https://test.pypi.org/) 注册账号并创建 API token。
 建议用环境变量传递 token，不要把 token 写进仓库：
@@ -578,7 +580,10 @@ pip install --index-url https://test.pypi.org/simple/ \
 `--extra-index-url` 用于从正式 PyPI 获取 `jieba`、`numpy` 等依赖，因为 TestPyPI
 不保证同步所有依赖。TestPyPI 适合彩排，确认无误后再发正式 PyPI。
 
-### 9. 上传到 PyPI
+### 9.（备用）手动上传到 PyPI
+
+推荐用第 10 节的 GitHub Actions + Trusted Publishing。只有需要绕过 CI 或排查上传
+问题时，才使用下面的本地 `twine` 流程。
 
 在 [pypi.org](https://pypi.org/) 创建 API token；首次发布通常需要账号级 token，
 项目创建后可改用仅限该项目的 token。账号需开启 2FA。
@@ -615,61 +620,50 @@ python -c "import tgrocery; print(tgrocery.__version__)"
 
 ### 10. 用 GitHub Actions 自动发布（推荐）
 
-比在本地保存 token 更安全的方式是 PyPI Trusted Publishing：GitHub Actions 通过
-OIDC 直接获取短期凭证，不需要 `TWINE_PASSWORD`。
+仓库已包含 `.github/workflows/pypi_publish.yml`。在 GitHub **发布 Release** 时，
+工作流会自动构建 wheel/sdist 并上传 PyPI。它使用 PyPI Trusted Publishing
+（OIDC 短期凭证），仓库中不需要保存 `TWINE_PASSWORD` 或 API token。
 
-1. 在 PyPI 项目页进入 **Publishing**，添加 GitHub publisher：
-   owner、repository、workflow 填 `publish.yml`、environment 填 `pypi`；
-   首次发布可选择 **pending publisher**。
-2. 在 GitHub 仓库的 **Settings → Environments** 创建 `pypi` 环境（可加人工审批）。
-3. 添加 `.github/workflows/publish.yml`：
+工作流关键点：
 
-```yaml
-name: publish
+- 触发条件：`release: types: [published]`
+- 构建 job `release-build`：`python -m build`，artifact 名 `release-dists`
+- 发布 job `pypi-publish`：`environment: pypi` + `permissions: id-token: write`
+- 上传动作：`pypa/gh-action-pypi-publish@release/v1`
 
-on:
-  release:
-    types: [published]
-  workflow_dispatch:
+一次性配置：
 
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - run: python -m pip install --upgrade build
-      - run: python -m build
-      - uses: actions/upload-artifact@v4
-        with:
-          name: dist
-          path: dist/
+1. 在 PyPI 的 **Publishing** 页面添加 GitHub publisher：
+   owner 填 `ranvane`、repository 填 `TextGrocery_Shop`、workflow 填
+   `pypi_publish.yml`、environment 填 `pypi`。项目尚不存在时使用
+   **pending publisher**。
+2. 在 GitHub 仓库 **Settings → Environments** 创建 `pypi` 环境，建议添加
+   required reviewers。
+3. 确认 `pyproject.toml` 的版本号与 `tgrocery/__init__.py` 的 `__version__`
+   一致。
 
-  publish:
-    needs: build
-    runs-on: ubuntu-latest
-    environment: pypi
-    permissions:
-      id-token: write
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: dist
-          path: dist/
-      - uses: pypa/gh-action-pypi-publish@release/v1
+发布流程：
+
+```bash
+# 1. 确保代码已提交、CI 通过，然后打 tag
+git tag v0.2.0
+git push origin v0.2.0
 ```
 
-`permissions: id-token: write` 必须保留，否则 OIDC 无法换取 PyPI 凭证。若要发布到
-TestPyPI，在 publish 步骤加：
+2. 打开 GitHub 仓库的 **Releases → Draft a new release**，选择 tag `v0.2.0`，
+   标题填 `v0.2.0`，点击 **Publish release**。
+3. 在 **Actions** 页面确认 `Upload Python Package` 工作流执行成功。
+4. 验证正式包：
 
-```yaml
-        with:
-          repository-url: https://test.pypi.org/legacy/
+```bash
+pip install --no-cache-dir textgrocery-shop==0.2.0
+python -c "import tgrocery; print(tgrocery.__version__)"
 ```
 
-并在 TestPyPI 的 Publishing 页面单独配置对应的 trusted publisher。
+`permissions: id-token: write` 必须保留，否则 OIDC 无法换取 PyPI 凭证。
+若要先发 TestPyPI，在 workflow 的上传步骤加
+`with: repository-url: https://test.pypi.org/legacy/`，并在 TestPyPI 的
+Publishing 页面单独配置对应的 trusted publisher。
 
 ### 11. 发布检查清单
 
@@ -681,9 +675,10 @@ TestPyPI，在 publish 步骤加：
 - [ ] `twine check` 全部 `PASSED`
 - [ ] wheel 内没有测试、示例、缓存和模型目录
 - [ ] 在干净环境安装 wheel 并能训练/预测
-- [ ] 在 TestPyPI 安装验证通过
+- [ ] （可选）在 TestPyPI 安装验证通过
 - [ ] 打 tag（如 `v0.2.0`）并推送
-- [ ] 正式 PyPI 上传后用 `pip install` 验证
+- [ ] 创建并发布 GitHub Release，触发 `Upload Python Package`
+- [ ] GitHub Actions 发布 job 成功，正式 PyPI 可用 `pip install` 安装
 - [ ] 未提交 `dist/`、`.pypirc`、token 或本地模型
 
 ## 开发
@@ -700,6 +695,8 @@ ruff format --check .
 - **2026-10-24**：PyPI 发行名改为 `TextGrocery_Shop`
   （`pip install textgrocery-shop`）；导入名仍为 `tgrocery`。
   许可证元数据与 `LICENSE.txt` 统一为 BSD-3-Clause。
+- **2026-10-24**：发布流程改为 GitHub Release + Trusted Publishing，工作流
+  `.github/workflows/pypi_publish.yml` 自动上传 PyPI。
 
 ## 许可证
 
