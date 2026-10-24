@@ -1,123 +1,148 @@
 # TextGrocery_Shop
 
-A simple, cross-platform short-text classification tool for **Python 3.10+**.
-It installs with **no C compiler**, and keeps the original `Grocery` API unchanged.
+一个简单、跨平台的中文短文本分类工具。支持 **Python 3.10+**，安装时**不需要任何 C 编译器**，
+并完整保留旧版 `Grocery` 的调用方式。
 
-[结巴/jieba](https://github.com/fxsjy/jieba) is the default tokenizer. On top of the
-original word-count baseline, 0.2.x adds character n-grams, TF-IDF weighting and
-L2-regularized logistic regression, which helps on very short texts such as news
-titles, product titles and ticket summaries.
+内置 [结巴分词](https://github.com/fxsjy/jieba)，在词特征之外增加字符 n-gram、TF-IDF 加权与
+L2 正则逻辑回归，对新闻标题、商品标题、工单摘要这类超短文本更友好。
 
-Other languages: [详细中文文档](README_CN.md)
+其他语言：[English](README_EN.md)
 
-## Origin and motivation
+## 项目来历
 
-The **original TextGrocery** by [2shou](https://github.com/2shou/TextGrocery) was a
-popular lightweight Chinese short-text baseline from the Python 2 era. It:
+**原版 TextGrocery**（作者 [2shou](https://github.com/2shou/TextGrocery)）诞生于 Python 2 时代，
+是中文短文本分类里常用的轻量基线。它的技术路线是：
 
-- tokenized Chinese with jieba;
-- built word unigram/bigram counts, then binarized and L2-normalized them;
-- called a compiled **LibShortText / LibLinear** C++ library through `ctypes`;
-- stored models with `pickle`.
+- 用 jieba 做中文分词；
+- 用词 unigram / bigram 计数构造特征，再做二值化和 L2 归一化；
+- 通过 `ctypes` 调用编译好的 **LibShortText / LibLinear** C++ 动态库完成训练与预测；
+- 模型用 `pickle` 保存。
 
-That design was simple and fast, but it accumulated real problems:
+这套方案在当时非常简单直接，但也积累了几个问题：
 
-1. Python 2 reached end of life, so the code no longer runs on Python 3.10+;
-2. installation required a C toolchain (MSVC on Windows, `make + gcc` elsewhere),
-   and the resulting `.so` files were not portable;
-3. `pickle` models were tied to specific Python/NumPy versions;
-4. ultra-short texts produced extremely sparse word features and lost unseen words;
-5. there were no probability outputs and little room for feature extensions.
+1. **Python 2 已停止维护**，原代码无法在 Python 3.10+ 上运行；
+2. **安装依赖 C 编译器**，Windows 上需要 MSVC、Linux/macOS 上需要 `make + gcc`，
+   而且编译出的 `.so` 不能跨平台复用；
+3. **模型不可移植**：`pickle` 与 Python 版本、NumPy 版本绑定，换环境经常直接失败；
+4. **超短文本效果有限**：十几字的标题分词后只剩几个词，未登录词直接丢失，特征向量接近全零；
+5. **只有决策值，没有概率**，也不方便扩展特征。
 
-**0.2.x** keeps the simple API and rewrites the internals with pure Python + NumPy:
-no compilation, character n-grams, TF-IDF, portable model files, probabilities,
-and optional tokenizer/normalization controls. Thanks to the original author and
-to the LibShortText / LibLinear projects for the design inspiration.
+**0.2.x 的目标**是保留“简单好用”的 API，同时把上述问题一次性解决：用纯 Python + NumPy
+重写训练器，去掉编译依赖；加入字符 n-gram 与 TF-IDF；模型改用 JSON + NumPy 数组；
+并补上概率输出、分词模式、用户词典等实用选项。旧版的设计思路仍然值得借鉴，
+感谢原作者与 LibShortText / LibLinear 的工作。
 
-## Highlights
+## 新版特性
 
-- **Zero-compilation install**: pure Python + NumPy on Windows, Linux and macOS.
-- **API unchanged**: `Grocery(name)` → `train()` → `save()` → `load()` → `predict()` / `test()`.
-- **Better on short text**: character 2–3 grams + sublinear TF + smooth IDF + L2.
-- **Probabilities**: `result.probabilities` alongside raw `result.dec_values`.
-- **Portable models**: `metadata.json` + `vocab.json` + `model.npz`, no `pickle`.
-- **Configurable tokenization**: full / precise / search modes, user dictionary,
-  stopwords and NFKC normalization.
-- **Fast**: about **80–85 µs per prediction** on a 10-class news-title model.
+- **零编译安装**：纯 Python + NumPy，`pip install` 在 Windows / Linux / macOS 行为一致。
+- **API 不变**：`Grocery(name)` → `train()` → `save()` → `load()` → `predict()` / `test()`。
+- **更适合短文本**：字符 2–3gram + sublinear TF + 平滑 IDF + L2 归一化。
+- **输出概率**：`result.probabilities`，同时保留原始决策值 `result.dec_values`。
+- **模型可搬运**：`metadata.json` + `vocab.json` + `model.npz`，不使用 `pickle`。
+- **分词可配置**：全模式 / 精确模式 / 搜索引擎模式，支持用户词典、停用词、NFKC 归一化。
+- **速度**：10 类新闻标题模型上约 **80–85 µs/条**，训练全程向量化。
 
-## Install
+## 安装
 
 ```bash
 pip install textgrocery-shop
 ```
 
-The PyPI distribution is `TextGrocery_Shop` (normalized to `textgrocery-shop`);
-the import name stays `tgrocery`, so existing code needs no changes.
+PyPI 发行名为 `TextGrocery_Shop`（会被规范化为 `textgrocery-shop`）；导入名仍是
+`tgrocery`，老代码不需要改。
 
-From source:
+从源码安装：
 
 ```bash
 pip install .
 ```
 
-Dependencies: `jieba`, `numpy`. Python ≥ 3.10.
+依赖：`jieba`、`numpy`；Python ≥ 3.10。
 
-## Quick start
+## 快速开始
 
 ```python
 from tgrocery import Grocery
 
+# 创建一个杂货铺，名字同时作为模型目录名
 grocery = Grocery("sample")
 
+# 用列表训练：[(标签, 文本), ...]
 train_src = [
-    ("education", "Student debt to cost Britain billions within decades"),
-    ("education", "Chinese education for TV experiment"),
-    ("sports", "Middle East and Asia boost investment in top level sports"),
-    ("sports", "Summit Series look launches HBO Canada sports doc series: Mudhar"),
+    ("education", "名师指导托福语法技巧：名词的复数形式"),
+    ("education", "中国高考成绩海外认可 是狼来了吗"),
+    ("sports", "图文：法网孟菲尔斯苦战进16强 孟菲尔斯怒吼"),
+    ("sports", "四川丹棱举行全国长距登山挑战赛 近万人参与"),
 ]
 grocery.train(train_src)
 
-# Or train from a file: label<TAB>text (UTF-8)
+# 也可以从文件训练：标签<TAB>文本（UTF-8）
 # grocery.train("train_ch.txt")
 
 grocery.save()
 
+# 加载模型（名字与保存时一致）
 new_grocery = Grocery("sample")
 new_grocery.load()
 
-result = new_grocery.predict("Abbott government spends $8 million on higher education media blitz")
-print(result)  # education
-print(result.dec_values)  # {'education': 2.13, 'sports': -2.05}
-print(result.probabilities)  # {'education': 0.98, 'sports': 0.02}
+# 预测
+result = new_grocery.predict("考生必读：新托福写作考试评分标准")
+print(result)  # education（与旧版一样直接打印标签）
+print(result.dec_values)  # {'education': 2.13, 'sports': -2.05, ...}
+print(result.probabilities)  # {'education': 0.91, 'sports': 0.06, ...}
 
-test_result = new_grocery.test(train_src)
+# 批量测试
+test_src = [
+    ("education", "福建春季公务员考试报名18日截止 2月6日考试"),
+    ("sports", "意甲首轮补赛交战记录:米兰客场8战不败国米10年连胜"),
+]
+test_result = new_grocery.test(test_src)
 print(test_result.accuracy_overall)
-test_result.show_result()  # per-label precision / recall table
+test_result.show_result()  # 逐标签精确率 / 召回率表格
 ```
 
-More examples live in [sample/](sample/).
+更多示例见 [sample/](sample/)。
 
-## Why it works better on short text
+## 为什么对短文本更有效
 
-The original pipeline was “word counts → binary → L2”. On titles of a dozen
-characters, segmentation leaves only a few words and many of them are out of
-vocabulary, so the feature vector is almost all zeros. 0.2.x mitigates this in
-three ways:
+原版的特征是“词计数 → 二值化 → L2”。标题再短一些时，分词后往往只剩 3–5 个词，
+大量词不在词表里，最终输入向量接近全零。新版从三个层面缓解：
 
-1. **Character 2–3 grams** (`c:中国`, `c:国高`, `c:高考`, …) link unseen words
-   through shared characters without depending on segmentation.
-2. **TF-IDF**: sublinear TF (`1 + log tf`), smooth IDF (`log((1+N)/(1+df)) + 1`)
-   and L2 normalization keep repeated words and document length from dominating.
-3. **Better classifier and noise control**: one-vs-rest logistic regression with
-   L2 regularization, optimized by L-BFGS with Armijo line search; automatic
-   `min_df` (1 below 1000 documents, 2 above); optional balanced class weights.
-   Sparse products use `numpy.bincount`, so the heavy lifting stays in C.
+### 1. 字符 n-gram 兜底
 
-## Tokenization and text preprocessing
+```text
+"中国高考" → c:中国, c:国高, c:高考, c:中国高, c:国高考
+```
 
-The default remains jieba **full mode** (`cut_all=True`), matching the original
-behavior and performing best on our benchmark. All new options are keyword-only;
-omitting them preserves the old behavior.
+即使“高考生”“考研”是未登录词，只要共享“高考”两个字符，就能命中 `c:高考`。
+词特征和字符特征分别加 `w:` / `c:` 前缀，互不覆盖。
+
+### 2. TF-IDF 加权
+
+- **sublinear TF**：`1 + log(tf)`，避免一个词重复出现就主导整条文本；
+- **平滑 IDF**：`log((1 + N) / (1 + df)) + 1`，降低“的、是”等高频词权重，且不会出现 0/负值；
+- **L2 行归一化**：让长短文本处于同一尺度。
+
+### 3. 分类器与噪声控制
+
+- OvR 逻辑回归 + L2 正则，用 **L-BFGS**（Armijo 回溯线搜索）优化；
+- `min_df` 自动策略：语料 ≥ 1000 篇时过滤只出现一次的特征，小语料则全部保留；
+- `class_weight="balanced"` 处理类别不平衡；
+- 稀疏矩阵乘法用 `numpy.bincount`，计算仍发生在 C 层。
+
+目标函数：
+
+$$
+\min_{w_k,b_k}\;\frac{1}{2}\lVert w_k\rVert^2
++ C\sum_{i=1}^{n}s_i\log\!\left(1+\exp\!\left(-y_{ik}(w_k^\top x_i+b_k)\right)\right)
+$$
+
+预测时取 `argmax_k (w_k^T x + b_k)`，再经 softmax 得到概率。
+
+## 分词与文本预处理
+
+默认分词器仍是 jieba 全模式（`cut_all=True`），这是原版行为，也是当前数据上效果最好的模式。
+新增选项都通过**仅关键字参数**提供，不传时行为不变。
 
 ```python
 grocery = Grocery(
@@ -125,52 +150,59 @@ grocery = Grocery(
     tokenizer="full",  # full | precise | search
     normalize="none",  # none | nfkc
     char_ngram_mode="global",  # global | word_boundary
-    mask_patterns=False,  # mask URLs / emails / numbers
-    stopwords=["的", "了"],  # iterable or file path
-    user_dict="domain_words.txt",  # one word per line
+    mask_patterns=False,  # URL / 邮箱 / 数字占位符
+    stopwords=["的", "了"],  # 也可传文件路径
+    user_dict="domain_words.txt",  # 每行一个领域词
 )
 ```
 
-### Tokenizer modes
+### 分词模式
 
-| Mode | Description | Accuracy |
+| 模式 | 说明 | 实测准确率 |
 |---|---|---:|
-| `full` (default) | all possible words; high recall | **90.22%** |
-| `precise` | single most likely segmentation | 89.28% |
-| `search` | precise + sub-words of long words | 89.40% |
+| `full`（默认） | 全模式，输出所有可能成词的片段，召回高 | **90.22%** |
+| `precise` | 精确模式，只输出一条最可能的切分 | 89.28% |
+| `search` | 搜索引擎模式，精确模式 + 长词子词 | 89.40% |
 
-Measured on THUCNews 30k/5k with identical features and hyper-parameters.
-Full mode still wins; precise mode produces fewer features (149k vs 164k) and
-trains slightly faster. Benchmark on your own domain before switching.
+同一份 THUCNews 30k/5k 数据、相同特征与超参数下，全模式仍最好。精确模式特征更少
+（149k vs 164k）、训练略快，适合对内存/延迟更敏感的场景；领域不同可以自行 A/B。
 
-### User dictionary
+### 用户词典
 
-Domain entities and product names are often split incorrectly. Pass a word file
-(or an iterable) as `user_dict`; words are registered with jieba and **saved into
-the model metadata**, so loading on another machine reproduces the same features.
+领域实体、产品名、缩写在通用词典里经常被切碎。把词表文件传给 `user_dict`，
+初始化时会注册进 jieba，并**随模型一起写入 metadata**，换机器加载也能复现：
 
 ```python
 grocery = Grocery("sample", user_dict="domain_words.txt")
+# 或直接传列表
 grocery = Grocery("sample", user_dict=["烯晶算力网络", "星云一体机"])
 ```
 
-`user_dict` accepts UTF-8 text with **one word per line**. Sogou's exported `.scel`
-cell dictionaries are binary and cannot be passed directly; convert them first.
+当前 `user_dict` 只接受 **UTF-8 文本、每行一个词**；词内可以包含空格，但不能带频次、
+拼音或词性列。搜狗导出的 `.scel` 是二进制细胞词库，**不能直接传给 `user_dict`**，
+需要先转换成纯文本。下面是一套完整的转换与清洗流程。
 
-#### Using a Sogou thesaurus as `user_dict`
+#### 1. 把 `.scel` 转成文本
 
-1. Convert the `.scel` file to `.txt` with a tool such as
-   [ImeWlConverter / 深蓝词库转换](https://github.com/studyzy/imewlconverter) or
-   `scel2txt`.
-2. Keep only the word column. Exports often contain frequency, pinyin or POS
-   columns (`word<TAB>freq`, `word pinyin freq`, `word 10 n`, `word,freq,pos`).
-   Prefer a **TAB-separated** export format; a space-separated
-   `word pinyin freq` line cannot be split reliably without knowing where the
-   word ends.
-3. Save as **UTF-8 without BOM**, one word per line.
-4. Pass the cleaned file to `user_dict`.
+使用[深蓝词库转换](https://github.com/studyzy/imewlconverter)（ImeWlConverter）、`scel2txt` 等工具，把 `.scel` 导出为 `.txt`。
+不同工具的输出列不完全一样，常见形式有：
 
-Cleaning script:
+```text
+烯晶算力网络
+烯晶算力网络	10
+烯晶算力网络	xijing suanli wangluo	10
+烯晶算力网络 10 n
+烯晶算力网络,10,名
+```
+
+前四种分别对应“纯词”“词 + 频次”“词 + 拼音 + 频次”“jieba 风格词 + 频次 + 词性”。
+我们的加载器只认第一种，其他格式需要清洗。**建议在转换工具里把输出列配置为
+TAB 分隔**（`词<TAB>频次` 或 `词<TAB>拼音<TAB>频次`）；如果工具只能输出空格分隔的
+`词 拼音 频次`，请先改成 TAB/CSV 再清洗，否则拼音会被当成词的一部分。
+
+#### 2. 清洗成“每行一个词”
+
+把下面的脚本保存为 `sogou_to_userdict.py`，按实际情况修改输入输出路径后运行：
 
 ```python
 from pathlib import Path
@@ -178,6 +210,14 @@ import re
 
 
 def sogou_to_userdict(src: str, dst: str) -> None:
+    """把搜狗转换后的词表清洗成 TextGrocery_Shop 的 user_dict 格式。
+
+    规则：
+    1. 优先按 TAB / 逗号取第一列（词），丢掉频次、拼音、词性；
+    2. 没有分隔符时，去掉行尾的“频次 [词性]”，兼容 "词 10 n"；
+    3. 跳过空行与 # 注释，按原顺序去重；
+    4. 统一输出 UTF-8（无 BOM），每行一个词。
+    """
     words: list[str] = []
     seen: set[str] = set()
 
@@ -186,115 +226,152 @@ def sogou_to_userdict(src: str, dst: str) -> None:
         if not line or line.startswith("#"):
             continue
 
-        # TSV / CSV: first column is the word
+        # TSV / CSV：第一列是词，其余列是频次、拼音或词性
         first = re.split(r"[\t,]", line, maxsplit=1)[0].strip()
 
-        # Space-separated "word freq [tag]" -> drop the trailing columns.
-        # For "word pinyin freq", configure a TAB/CSV export instead.
-        # Warning: without TAB/comma, a product name such as "iPhone 15"
-        # would lose its trailing number; prefer TAB-separated exports.
+        # 空格分隔：只处理 "词 频次 [词性]"；
+        # 若是 "词 拼音 频次"，请在转换工具中改用 TAB/CSV 输出。
+        # 注意：没有 TAB/逗号时，"iPhone 15" 这类词尾数字会被误删；
+        # 如果词表含此类产品名，请优先使用 TAB 分隔的导出格式。
         word = re.sub(r"\s+\d+(?:\s+[a-z]+)?$", "", first).strip()
 
-        if word and word not in seen:
-            seen.add(word)
-            words.append(word)
+        if not word or word in seen:
+            continue
+        seen.add(word)
+        words.append(word)
 
     Path(dst).write_text("\n".join(words) + "\n", encoding="utf-8")
+    print(f"写入 {len(words)} 个词 -> {dst}")
 
 
-sogou_to_userdict("sogou_export.txt", "domain_words.txt")
+if __name__ == "__main__":
+    sogou_to_userdict("sogou_export.txt", "domain_words.txt")
 ```
 
-Then:
+运行后检查一下结果：
+
+```bash
+python -c "from pathlib import Path; w=Path('domain_words.txt').read_text(encoding='utf-8').splitlines(); print(len(w)); print(w[:20])"
+```
+
+#### 3. 交给 `user_dict`
 
 ```python
-grocery = Grocery("sample", tokenizer="precise", user_dict="domain_words.txt")
-print(len(grocery.feature_config.user_words))
+from tgrocery import Grocery
+
+grocery = Grocery(
+    "sample",
+    tokenizer="precise",  # 领域词较多时，精确模式通常更稳
+    user_dict="domain_words.txt",
+)
+print(len(grocery.feature_config.user_words))  # 已加载的词数
 
 grocery.train(train_src)
+
+# 验证领域词确实进入了词表（词特征带 w: 前缀）
 print("w:烯晶算力网络" in grocery.model.text_converter.feature2idx)
 ```
 
-The words are stored in `metadata.json` under `features.user_words`, so
-`Grocery("sample").load()` can reproduce them on another machine **without the
-original dictionary file**.
+保存后，词表会写入 `metadata.json` 的 `features.user_words`：
 
-Notes:
+```json
+{
+  "features": {
+    "tokenizer": "precise",
+    "user_words": ["烯晶算力网络", "星云一体机"]
+  }
+}
+```
 
-- Do not import a whole Sogou dictionary. Keep only domain entities, product
-  names, IDs and abbreviations — a few thousand to ~20k words. Large lists bloat
-  `metadata.json` and slow down `load()`.
-- If `lowercase=True` (default), English words are lowercased in metadata.
-  Set `lowercase=False` when product-name casing is meaningful.
-- jieba's dictionary is process-global: multiple `Grocery` instances with
-  different `user_dict` values share words in one process. Use separate
-  processes when strict isolation is required.
-- Pin the jieba version if segmentation must be byte-for-byte reproducible.
-- Sogou dictionaries have their own license terms. The word list is embedded in
-  the model metadata and will be redistributed with the model.
-- `user_dict` only affects jieba tokenization; it is ignored when
-  `custom_tokenize` is used.
+之后 `Grocery("sample").load()` 会从 metadata 重新注册这些词，**换机器加载模型时
+不需要再带原始词典文件**。
 
-### Stopwords, normalization and masking
+#### 4. 注意事项
 
-- `stopwords` accepts a file path or iterable; it applies to word features and
-  `word_boundary` character features (not to `global` character n-grams).
-- `normalize="nfkc"` converts full-width letters/numbers/punctuation to half-width.
-- `mask_patterns=True` replaces URLs, emails and numbers with `__url__`,
-  `__email__` and `__num__`, which helps on link/price-heavy UGC.
-- `char_ngram_mode="word_boundary"` slides n-grams inside words with boundary
-  padding (like scikit-learn's `char_wb`), avoiding cross-word noise in
-  English/mixed text. It is the only option that can noticeably slow tokenization;
-  pair it with `tokenizer="precise"`.
+- **不要直接导入全量搜狗词库**。通用词对分类帮助很小，却会让 `metadata.json`
+  膨胀、`load()` 变慢。建议只保留领域实体、产品名、型号、缩写、人名地名，
+  规模控制在几千到一两万词。
+- 搜狗词库通常带频次。如果转换工具保留了频次，可以先按频次阈值过滤，再做上面的清洗。
+- 开启 `lowercase=True`（默认）时，英文词会被转成小写后写入 metadata；
+  如果产品名大小写有意义，请设置 `lowercase=False`。
+- 同一进程内 jieba 的词典是全局状态：多个 `Grocery` 使用不同 `user_dict` 时会互相影响。
+  需要严格隔离时，把不同模型放到不同进程中使用。
+- 不同 jieba 版本的基础词典可能略有差异；对分词结果要求完全可复现时，请固定 jieba 版本。
+- 搜狗词库有各自的许可条款；把词表写入模型 metadata 意味着它会随模型一起分发，
+  请确认授权范围。
+- `user_dict` 只影响 jieba 分词；使用 `custom_tokenize` 时不会生效。
 
-### Efficiency
+### 停用词
 
-The default path is unchanged: full mode + global character n-grams, no regex or
-NFKC work. 30k training takes about **26.7 s**, and 5k predictions about
-**0.42 s**. Extra normalization, stopwords and user dictionaries only cost
-anything when enabled.
+`stopwords` 支持文件路径或可迭代对象，只作用于词特征与 `word_boundary` 字符特征。
+`global` 字符特征不会删除停用词，否则会破坏相邻字符 n-gram。
 
-## Measured results
+### 归一化与占位符
 
-Dataset: THUCNews 10-class news titles (30,000 train / 5,000 test, median length
-19 characters). Same classifier and hyper-parameters (`C=8`, `max_iter=50`,
-`min_df=2`); only features differ.
+- `normalize="nfkc"`：全角字母/数字/标点转半角，统一 `ＡＢＣ` 与 `ABC`；
+- `mask_patterns=True`：把 URL、邮箱、数字替换为 `__url__` / `__email__` / `__num__`，
+  适合链接、价格、日期很多 UGC 文本，避免特征爆炸。
 
-| Config | Full titles | Truncated to 10 chars | Train |
+### 字符 n-gram 模式
+
+- `global`（默认）：去掉空白后整串滑窗，中文标题效果最好；
+- `word_boundary`：只在词内部滑窗并补边界空格（类似 sklearn 的 `char_wb`），
+  避免英文/中英混排生成跨词噪声。分词更重时开销会上升，建议搭配 `tokenizer="precise"`。
+
+### 效率
+
+默认路径（全模式 + 全局字符 n-gram + 不做 NFKC/占位符替换）与之前完全一致：
+30k 训练约 **26.7 s**，5k 预测约 **0.42 s**。新增的归一化、停用词、用户词典
+只在开启时产生额外开销；`word_boundary` 是唯一可能明显变慢的选项。
+
+## 实测效果
+
+数据：THUCNews 10 类新闻标题（训练 30,000 / 测试 5,000，标题中位数 19 字）。
+三组配置使用相同的分类器与超参数（`C=8`、`max_iter=50`、`min_df=2`），只改变特征：
+
+| 配置 | 完整标题 | 截断到 10 字 | 训练耗时 |
 |---|---:|---:|---:|
-| `legacy` (word 1–2gram, binary, no IDF) | 88.82% | 82.86% | 11.0 s |
-| `word_tfidf` (word 1–2gram + TF-IDF) | 89.20% | 83.74% | 10.8 s |
-| **`word_char` (word + char 2–3gram + TF-IDF)** | **90.22%** | **84.66%** | 26.7 s |
+| `legacy`（词 1–2gram、二值、无 IDF） | 88.82% | 82.86% | 11.0 s |
+| `word_tfidf`（词 1–2gram + TF-IDF） | 89.20% | 83.74% | 10.8 s |
+| **`word_char`（词 + 字符 2–3gram + TF-IDF）** | **90.22%** | **84.66%** | 26.7 s |
 
-> These numbers are not directly comparable to the old README table
-> (48k/16k titles, 32 labels, LibLinear). Run `benchmark.py` on your own data.
+预测：5,000 条约 0.42 秒（约 84 微秒/条）。
+
+> 该数据与旧版 README 中的 48k/16k、32 类基准不是同一份数据，绝对数值不可直接比较。
+> 请运行 `benchmark.py` 在你自己的数据上验证。
+
+## 基准测试
 
 ```bash
+# 对比 legacy / word_tfidf / word_char
 python benchmark.py --train cnews.train.txt --test cnews.test.txt
+
+# 模拟超短文本（每条截断到前 10 个字符）
 python benchmark.py --train cnews.train.txt --test cnews.test.txt --truncate 10
+
+# 限制样本量，快速试验
 python benchmark.py --train cnews.train.txt --test cnews.test.txt \
     --train-size 30000 --test-size 5000
 ```
 
-Input format is `text<TAB>label` by default; use `--label-column first` for
-`label<TAB>text`.
+数据格式默认是 `文本<TAB>标签`；若是 `标签<TAB>文本`，加 `--label-column first`。
 
-## Options
+## 参数说明
 
-All options are keyword-only and optional.
+所有新增参数都是**仅关键字参数**，旧代码无需修改。
 
 ```python
 Grocery(
     "name",
-    custom_tokenize=None,  # takes precedence over tokenizer
-    C=8.0,  # inverse L2 regularization strength
-    class_weight=None,  # None | "balanced" | {"label": weight}
-    word_ngrams=(1, 2),
-    char_ngrams=(2, 3),  # () disables character n-grams
+    custom_tokenize=None,  # 自定义分词函数，优先级高于 tokenizer
+    C=8.0,  # L2 正则强度的倒数
+    class_weight=None,  # None | "balanced" | {"标签": 权重}
+    word_ngrams=(1, 2),  # 词级 n-gram
+    char_ngrams=(2, 3),  # 字符级 n-gram；() 表示关闭
     lowercase=True,
-    min_df=None,  # None = auto (1 below 1000 docs, else 2)
+    min_df=None,  # None = 自动（<1000 篇取 1，否则取 2）
     max_features=None,
-    binary=False,  # True reproduces the old binary features
+    binary=False,  # True 时退化为旧版二值特征
     sublinear_tf=True,
     use_idf=True,
     smooth_idf=True,
@@ -311,70 +388,79 @@ Grocery(
 )
 ```
 
-Tips:
+调参建议：
 
-- Large corpora / limited memory: `max_features=300000` or a higher `min_df`.
-- Imbalanced classes: `class_weight="balanced"`.
-- Maximum speed: `char_ngrams=()`.
-- English or mixed text: `tokenizer="precise", char_ngram_mode="word_boundary"`.
-- Full-width or noisy UGC text: `normalize="nfkc"`, optionally `mask_patterns=True`.
-- Exact legacy features: `word_ngrams=(1, 2), char_ngrams=(), binary=True,
-  sublinear_tf=False, use_idf=False, normalize="none"`.
+- 数据量大、内存吃紧：`max_features=300000` 或提高 `min_df`；
+- 类别不平衡：`class_weight="balanced"`；
+- 追求速度：`char_ngrams=()`，只用词特征 + TF-IDF；
+- 英文/中英混排较多：`tokenizer="precise", char_ngram_mode="word_boundary"`；
+- 全角字符或 UGC 文本：`normalize="nfkc"`，必要时加 `mask_patterns=True`；
+- 完全复现旧版特征：`word_ngrams=(1, 2), char_ngrams=(), binary=True,
+  sublinear_tf=False, use_idf=False, normalize="none"`。
 
-## Model format
+## 模型目录格式
+
+`save()` 生成一个自包含、可移植的目录：
 
 ```text
 name/
-    id                 # model hash
-    metadata.json      # labels, feature config (tokenizer/stopwords/user words), params
-    vocab.json         # feature vocabulary (UTF-8)
-    vectorizer.npz     # IDF vector
-    model.npz          # weight matrix + intercept
+    id                 # 模型哈希
+    metadata.json      # 标签、特征配置（含分词/停用词/用户词典）、分类器参数
+    vocab.json         # 特征词表（UTF-8）
+    vectorizer.npz     # IDF 向量
+    model.npz          # 权重矩阵 + 偏置
 ```
 
-No `pickle`, so models can move across Python versions and operating systems.
-**Old 0.1.x models are not loadable**; retrain once with 0.2.x. Early 0.2.0
-models still load: missing new options fall back to the old behavior.
+不使用 `pickle`，模型可在不同 Python 版本、不同操作系统之间搬运；
+出问题时也可以直接打开 `metadata.json` / `vocab.json` 检查。
 
-## Packaging and publishing
+## 兼容性与迁移
 
-This section is for maintainers. The project is pure Python, so the wheel is
-`py3-none-any` and no C compiler is needed.
+- **调用方式不变**：`Grocery(name)`、`train()`、`save()`、`load()`、`predict()`、
+  `test()`，以及 `GroceryPredictResult` / `GroceryTestResult` 的字段与旧版一致。
+- `predict()` 返回对象可以 `print` 出标签；新增 `probabilities`。
+- 旧的 C 后端（LibShortText / LibLinear）已移除，当前只保留纯 NumPy 实现。
+- **0.1.x 旧模型不可加载**：旧模型依赖 pickle 与 C 后端，请用新版重新训练一次。
+- 0.2.0 早期模型仍可加载：缺失的新配置会自动回退到旧行为。
 
-### 1. Distribution name
+## 打包与发布
 
-The distribution name is `TextGrocery_Shop`. PyPI and pip normalize it to
-`textgrocery-shop`, so the install command is:
+本节面向维护者，说明如何构建 wheel/sdist、上传 TestPyPI 和 PyPI。项目是纯 Python 包，
+wheel 为 `py3-none-any`，构建过程不需要 C 编译器。
+
+### 1. 发行名
+
+发行名是 `TextGrocery_Shop`。PyPI 与 pip 会把它规范化为 `textgrocery-shop`，
+所以安装命令是：
 
 ```bash
 pip install textgrocery-shop
 ```
 
-The import name stays `tgrocery`; only the install command differs from the
-original project. The name was free on PyPI at the time of writing — verify at
-<https://pypi.org/project/textgrocery-shop/> before the first upload. If it is
-taken, change `[project].name` in `pyproject.toml` to another unique name and
-update every `pip install` command in both READMEs.
+Python 导入名仍然是 `tgrocery`，只有安装命令与原版不同。撰写本文时该名称在
+PyPI 上可用，首次上传前请再确认 <https://pypi.org/project/textgrocery-shop/>。
+如果已被占用，修改 `pyproject.toml` 的 `[project].name`，并同步更新两份 README
+里所有 `pip install` 命令。
 
-### 2. Keep both versions in sync
+### 2. 同步版本号
 
-The version is stored in two places:
+版本号出现在两个地方，发布前必须保持一致：
 
-- `[project].version` in `pyproject.toml`
-- `__version__` in `tgrocery/__init__.py`
+- `pyproject.toml` 的 `[project].version`
+- `tgrocery/__init__.py` 的 `__version__`
 
 ```bash
-# read the version from pyproject.toml (works on Python 3.10)
+# 查看 pyproject.toml 中的版本号（兼容 Python 3.10）
 python -c "import pathlib; print([line for line in pathlib.Path('pyproject.toml').read_text('utf-8').splitlines() if line.startswith('version =')][0])"
 python -c "import tgrocery; print(tgrocery.__version__)"
 ```
 
-PyPI versions cannot be overwritten. Bump the version for every release; deleting
-a release does not let you reuse the same version or filename.
+PyPI 上的版本号不可覆盖，发布后也不能删除重传同一版本；每次发布都要提升版本号。
 
-### 3. Install build tools and clean old artifacts
+### 3. 安装构建工具并清理旧产物
 
 ```bash
+# 安装构建工具
 python -m pip install --upgrade build twine
 ```
 
@@ -389,7 +475,7 @@ Remove-Item -Recurse -Force build, dist -ErrorAction SilentlyContinue
 Get-ChildItem -Filter *.egg-info -Recurse | Remove-Item -Recurse -Force
 ```
 
-### 4. Run quality gates
+### 4. 运行质量检查
 
 ```bash
 ruff check .
@@ -397,38 +483,40 @@ ruff format --check .
 pytest
 ```
 
-### 5. Build the wheel and sdist
+三项都通过再打包，避免把坏版本发到 PyPI。
+
+### 5. 构建 wheel 与 sdist
 
 ```bash
 python -m build
 ```
 
-Output:
+产物在 `dist/`：
 
 ```text
 dist/
-    textgrocery_shop-0.2.0.tar.gz                  # source distribution
-    textgrocery_shop-0.2.0-py3-none-any.whl        # pure-Python wheel
+    textgrocery_shop-0.2.0.tar.gz                  # 源码包
+    textgrocery_shop-0.2.0-py3-none-any.whl        # 纯 Python wheel
 ```
 
-Use `python -m build --wheel` or `--sdist` to build only one artifact. `build`
-creates an isolated environment, so it needs network access to install
-`setuptools`.
+只构建 wheel 用 `python -m build --wheel`；只构建源码包用
+`python -m build --sdist`。`python -m build` 会创建隔离的构建环境，
+需要联网安装 `setuptools`。
 
-### 6. Inspect the artifacts
+### 6. 检查产物
 
 ```bash
 python -m zipfile -l dist/textgrocery_shop-0.2.0-py3-none-any.whl
 python -m twine check dist/*
 ```
 
-PowerShell does not expand `dist/*` for native commands:
+PowerShell 不会像 bash 那样展开 `dist/*`，可以改用：
 
 ```powershell
 python -m twine check (Get-ChildItem dist | ForEach-Object FullName)
 ```
 
-The wheel should contain only runtime code and metadata:
+wheel 里应只包含运行时代码和元数据，例如：
 
 ```text
 tgrocery/*.py
@@ -437,54 +525,49 @@ textgrocery_shop-0.2.0.dist-info/METADATA
 textgrocery_shop-0.2.0.dist-info/licenses/LICENSE.txt
 ```
 
-It must not contain `tests/`, `sample/`, `__pycache__/`, `build/` or model
-directories. The sdist is controlled by `MANIFEST.in` and also includes the
-README, tests and samples. `twine check` must print `PASSED` for every artifact.
+不应出现 `tests/`、`sample/`、`__pycache__/`、`build/` 或模型目录。源码包由
+`MANIFEST.in` 控制，会额外包含 README、测试和示例；两个产物都应由
+`twine check` 输出 `PASSED`。
 
-### 7. Install the wheel locally
+### 7. 本地安装 wheel 验证
 
-Install the freshly built wheel in a clean environment:
+在干净环境中安装刚构建的 wheel：
 
 ```bash
 python -m pip install --force-reinstall --no-deps dist/textgrocery_shop-0.2.0-py3-none-any.whl
 python -c "import tgrocery; print(tgrocery.__version__)"
 ```
 
-Smoke test:
+再跑一个最小训练/预测：
 
 ```bash
-python -c "from tgrocery import Grocery; g=Grocery('smoke'); g.train([('a','up new high'),('b','down loss risk')]); print(g.predict('up new high'))"
+python -c "from tgrocery import Grocery; g=Grocery('smoke'); g.train([('a','上涨 突破 新高'),('b','下跌 亏损 风险')]); print(g.predict('上涨 突破'))"
 ```
 
-This creates a `smoke/` model directory in the current directory; delete it after
-the check. Run this outside the source directory, otherwise Python may import the
-local `tgrocery/` package instead of the installed wheel. Check `pip show textgrocery-shop`
-if in doubt. Reinstall in editable mode afterwards if you continue development:
+该命令会在当前目录生成 `smoke/` 模型目录，验证后可以删除。如果当前目录是源码目录，
+Python 可能优先导入本地 `tgrocery/`；请换到其他目录执行，或确认 `pip show textgrocery-shop`
+的 `Location` 指向安装目录。验证完后如继续开发，再执行 `pip install -e .[test]`。
 
-```bash
-pip install -e .[test]
-```
+### 8. 上传到 TestPyPI
 
-### 8. Upload to TestPyPI
-
-Create an account and an API token at [test.pypi.org](https://test.pypi.org/).
-Pass credentials through environment variables, never commit them:
+先在 [test.pypi.org](https://test.pypi.org/) 注册账号并创建 API token。
+建议用环境变量传递 token，不要把 token 写进仓库：
 
 ```bash
 export TWINE_USERNAME=__token__
-export TWINE_PASSWORD=pypi-your-testpypi-token
+export TWINE_PASSWORD=pypi-你的TestPyPI令牌
 python -m twine upload --repository testpypi dist/*
 ```
 
-PowerShell:
+PowerShell：
 
 ```powershell
 $env:TWINE_USERNAME="__token__"
-$env:TWINE_PASSWORD="pypi-your-testpypi-token"
+$env:TWINE_PASSWORD="pypi-你的TestPyPI令牌"
 python -m twine upload --repository testpypi (Get-ChildItem dist | ForEach-Object FullName)
 ```
 
-Verify the uploaded package:
+从 TestPyPI 安装验证：
 
 ```bash
 pip install --index-url https://test.pypi.org/simple/ \
@@ -492,41 +575,37 @@ pip install --index-url https://test.pypi.org/simple/ \
     textgrocery-shop==0.2.0
 ```
 
-`--extra-index-url` lets pip fetch `jieba` and `numpy` from the real PyPI, since
-TestPyPI does not mirror all dependencies. Use TestPyPI as a rehearsal.
+`--extra-index-url` 用于从正式 PyPI 获取 `jieba`、`numpy` 等依赖，因为 TestPyPI
+不保证同步所有依赖。TestPyPI 适合彩排，确认无误后再发正式 PyPI。
 
-### 9. Upload to PyPI
+### 9. 上传到 PyPI
 
-Create an API token at [pypi.org](https://pypi.org/). The first upload usually
-needs an account-scoped token; later you can use a project-scoped token. Enable
-2FA on the account.
+在 [pypi.org](https://pypi.org/) 创建 API token；首次发布通常需要账号级 token，
+项目创建后可改用仅限该项目的 token。账号需开启 2FA。
 
 ```bash
 export TWINE_USERNAME=__token__
-export TWINE_PASSWORD=pypi-your-pypi-token
+export TWINE_PASSWORD=pypi-你的PyPI令牌
 python -m twine upload dist/*
 ```
 
-PowerShell:
+PowerShell：
 
 ```powershell
 $env:TWINE_USERNAME="__token__"
-$env:TWINE_PASSWORD="pypi-your-pypi-token"
+$env:TWINE_PASSWORD="pypi-你的PyPI令牌"
 python -m twine upload (Get-ChildItem dist | ForEach-Object FullName)
 ```
 
-Notes:
+说明：
 
-- `twine upload` defaults to PyPI; `--repository pypi` is optional.
-- If an upload is interrupted, do not rebuild a different artifact under the
-  same version. Check what was uploaded, then retry the same files or bump the
-  version.
-- Once PyPI accepts a version or filename, it cannot be reused, even after
-  deletion. Fix metadata with a new release.
-- Never commit `dist/`, `.pypirc` or tokens. `.pypirc` is already in
-  `.gitignore`.
+- `twine upload` 默认上传到正式 PyPI；显式指定可用 `--repository pypi`。
+- 上传过程中断时，**不要修改代码后覆盖同一版本**。先确认哪些文件已上传，
+  再决定重试同一批文件还是提升版本号。
+- 版本号或文件名一旦被 PyPI 接收，即使删除也不能复用；元数据写错也要发新版本。
+- 不要把 `dist/`、`.pypirc` 或 token 提交到 Git；`.pypirc` 已在 `.gitignore` 中。
 
-Verify the release:
+发布后验证：
 
 ```bash
 pip index versions textgrocery-shop
@@ -534,17 +613,16 @@ pip install --no-cache-dir textgrocery-shop==0.2.0
 python -c "import tgrocery; print(tgrocery.__version__)"
 ```
 
-### 10. Publish with GitHub Actions (recommended)
+### 10. 用 GitHub Actions 自动发布（推荐）
 
-PyPI Trusted Publishing avoids storing a long-lived token: GitHub Actions gets a
-short-lived OIDC credential.
+比在本地保存 token 更安全的方式是 PyPI Trusted Publishing：GitHub Actions 通过
+OIDC 直接获取短期凭证，不需要 `TWINE_PASSWORD`。
 
-1. On the PyPI project page, open **Publishing** and add a GitHub publisher
-   with the repository owner/name, workflow `publish.yml`, and environment
-   `pypi`. For a brand-new project, use a **pending publisher**.
-2. In GitHub, open **Settings → Environments** and create `pypi` (optionally
-   with required reviewers).
-3. Add `.github/workflows/publish.yml`:
+1. 在 PyPI 项目页进入 **Publishing**，添加 GitHub publisher：
+   owner、repository、workflow 填 `publish.yml`、environment 填 `pypi`；
+   首次发布可选择 **pending publisher**。
+2. 在 GitHub 仓库的 **Settings → Environments** 创建 `pypi` 环境（可加人工审批）。
+3. 添加 `.github/workflows/publish.yml`：
 
 ```yaml
 name: publish
@@ -583,31 +661,32 @@ jobs:
       - uses: pypa/gh-action-pypi-publish@release/v1
 ```
 
-`permissions: id-token: write` is required for OIDC. For TestPyPI, add the
-repository URL to the publish step and configure a matching trusted publisher on
-TestPyPI:
+`permissions: id-token: write` 必须保留，否则 OIDC 无法换取 PyPI 凭证。若要发布到
+TestPyPI，在 publish 步骤加：
 
 ```yaml
         with:
           repository-url: https://test.pypi.org/legacy/
 ```
 
-### 11. Release checklist
+并在 TestPyPI 的 Publishing 页面单独配置对应的 trusted publisher。
 
-- [ ] The distribution name is available, or the account owns it
-- [ ] `pyproject.toml` and `tgrocery/__init__.py` versions match
-- [ ] README install commands use the real distribution name
-- [ ] `ruff check .`, `ruff format --check .`, and `pytest` pass
-- [ ] `python -m build` produces both wheel and sdist
-- [ ] `twine check` reports `PASSED` for both
-- [ ] The wheel contains no tests, samples, caches or model directories
-- [ ] The wheel installs and passes a train/predict smoke test
-- [ ] The package installs from TestPyPI
-- [ ] A tag such as `v0.2.0` is created and pushed
-- [ ] The PyPI release installs with `pip`
-- [ ] `dist/`, `.pypirc`, tokens and local models are not committed
+### 11. 发布检查清单
 
-## Development
+- [ ] PyPI 发行名可用，或当前账号拥有该项目
+- [ ] `pyproject.toml` 与 `tgrocery/__init__.py` 的版本号一致
+- [ ] README 中的安装命令与实际发行名一致
+- [ ] `ruff check .`、`ruff format --check .`、`pytest` 全部通过
+- [ ] `python -m build` 生成 wheel 和 sdist
+- [ ] `twine check` 全部 `PASSED`
+- [ ] wheel 内没有测试、示例、缓存和模型目录
+- [ ] 在干净环境安装 wheel 并能训练/预测
+- [ ] 在 TestPyPI 安装验证通过
+- [ ] 打 tag（如 `v0.2.0`）并推送
+- [ ] 正式 PyPI 上传后用 `pip install` 验证
+- [ ] 未提交 `dist/`、`.pypirc`、token 或本地模型
+
+## 开发
 
 ```bash
 pip install -e .[test]
@@ -616,12 +695,12 @@ ruff check .
 ruff format --check .
 ```
 
-## Changelog
+## 更新日志
 
-- **2026-10-24**: Renamed the PyPI distribution to `TextGrocery_Shop`
-  (`pip install textgrocery-shop`); the import name stays `tgrocery`.
-  Unified the license metadata and `LICENSE.txt` to BSD-3-Clause.
+- **2026-10-24**：PyPI 发行名改为 `TextGrocery_Shop`
+  （`pip install textgrocery-shop`）；导入名仍为 `tgrocery`。
+  许可证元数据与 `LICENSE.txt` 统一为 BSD-3-Clause。
 
-## License
+## 许可证
 
-BSD. See [LICENSE.txt](LICENSE.txt).
+BSD，见 [LICENSE.txt](LICENSE.txt)。

@@ -1,6 +1,6 @@
 # AGENTS.md
 
-面向维护者的项目约定。用户文档见 `README.md` / `README_CN.md`。
+面向维护者的项目约定。用户文档：`README.md`（中文，默认）/ `README_EN.md`（英文）。
 
 ## 身份约定
 
