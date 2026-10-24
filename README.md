@@ -442,19 +442,34 @@ PyPI。整个流程不需要在仓库或本地保存 PyPI API token。
 
 ### 发布流程
 
+前置：本机已安装并登录 GitHub CLI（`gh auth login`），且待发布提交的 CI 已通过。
+
 ```bash
-# 1. 提交代码，等 CI 通过后打 tag
+# 1. 推送代码
+git push origin main
+
+# 2. 打 tag 并推送
 git tag v0.2.0
 git push origin v0.2.0
+
+# 3. 创建并发布 GitHub Release，自动触发 PyPI 发布
+gh release create v0.2.0 \
+  --title "v0.2.0" \
+  --generate-notes \
+  --verify-tag
+
+# 4. 查看发布工作流
+gh run list --workflow pypi_publish.yml --limit 1
+
+# 5. 等待工作流结束，把 RUN_ID 换成上一步输出的 ID
+gh run watch RUN_ID --exit-status
 ```
 
-2. 打开 GitHub 仓库的 **Releases → Draft a new release**，选择 tag `v0.2.0`，
-   标题填 `v0.2.0`，点击 **Publish release**。
-3. 工作流 `Upload Python Package` 会自动执行：
-   - `python -m build` 生成 `textgrocery_shop-0.2.0-py3-none-any.whl` 和
-     `textgrocery_shop-0.2.0.tar.gz`；
-   - 通过 `pypa/gh-action-pypi-publish@release/v1` 上传到 PyPI。
-4. 在 **Actions** 页面确认发布 job 成功。
+工作流 `Upload Python Package` 会自动执行：
+
+- `python -m build` 生成 `textgrocery_shop-0.2.0-py3-none-any.whl` 和
+  `textgrocery_shop-0.2.0.tar.gz`；
+- 通过 `pypa/gh-action-pypi-publish@release/v1` 上传到 PyPI。
 
 工作流中的 `permissions: id-token: write` 必须保留，否则 OIDC 无法换取 PyPI
 短期凭证。

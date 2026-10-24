@@ -356,19 +356,36 @@ it to PyPI. No PyPI API token is stored in the repository or locally.
 
 ### Release flow
 
+Prerequisite: GitHub CLI is installed and authenticated (`gh auth login`), and
+CI for the commit being released has passed.
+
 ```bash
-# 1. Commit and push the code, wait for CI, then tag it
+# 1. Push the code
+git push origin main
+
+# 2. Create and push the tag
 git tag v0.2.0
 git push origin v0.2.0
+
+# 3. Create and publish the GitHub Release, triggering PyPI publishing
+gh release create v0.2.0 \
+  --title "v0.2.0" \
+  --generate-notes \
+  --verify-tag
+
+# 4. List the publish workflow run
+gh run list --workflow pypi_publish.yml --limit 1
+
+# 5. Wait for the run to finish; replace RUN_ID with the ID printed above
+gh run watch RUN_ID --exit-status
 ```
 
-2. Open the repository's **Releases → Draft a new release**, choose tag
-   `v0.2.0`, set the title to `v0.2.0`, and click **Publish release**.
-3. The `Upload Python Package` workflow runs automatically:
-   - `python -m build` creates `textgrocery_shop-0.2.0-py3-none-any.whl` and
-     `textgrocery_shop-0.2.0.tar.gz`;
-   - `pypa/gh-action-pypi-publish@release/v1` uploads them to PyPI.
-4. Confirm the publish job succeeded on the **Actions** page.
+The `Upload Python Package` workflow then:
+
+- runs `python -m build` to create
+  `textgrocery_shop-0.2.0-py3-none-any.whl` and
+  `textgrocery_shop-0.2.0.tar.gz`;
+- uploads them to PyPI with `pypa/gh-action-pypi-publish@release/v1`.
 
 Keep `permissions: id-token: write` in the workflow; without it OIDC cannot
 exchange a short-lived PyPI credential.
