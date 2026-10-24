@@ -1,0 +1,9 @@
+include README.md
+include README_CN.md
+include AGENTS.md
+include LICENSE.txt
+include pyproject.toml
+include benchmark.py
+
+recursive-include tests *.py
+recursive-include sample *.py

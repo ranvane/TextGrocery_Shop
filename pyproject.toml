@@ -1,0 +1,58 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "TextGrocery_Shop"
+version = "0.2.0"
+description = "TextGrocery_Shop: a simple, cross-platform short-text classification tool (Python 3.10+)"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "BSD-3-Clause"
+license-files = ["LICENSE.txt"]
+authors = [
+    { name = "ranvane", email = "ranvane@gmail.com" },
+]
+maintainers = [
+    { name = "ranvane", email = "ranvane@gmail.com" },
+]
+keywords = ["text classification", "short text", "tf-idf", "logistic regression", "jieba"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Natural Language :: Chinese (Simplified)",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Text Processing :: Linguistic",
+]
+dependencies = [
+    "jieba>=0.42.1",
+    "numpy>=1.23",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=7.0"]
+
+[project.urls]
+Homepage = "https://github.com/ranvane/TextGrocery_Shop"
+Repository = "https://github.com/ranvane/TextGrocery_Shop"
+PyPI = "https://pypi.org/project/textgrocery-shop/"
+
+[tool.setuptools]
+packages = ["tgrocery", "tgrocery.learner"]
+include-package-data = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
